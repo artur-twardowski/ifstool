@@ -1,6 +1,6 @@
 import getopt
 import os
-from sys import argv
+from sys import argv, stdout
 import tempfile
 import subprocess
 from copy import deepcopy
@@ -21,22 +21,73 @@ class FileAction:
             IGNORE,
             PICK]
 
-
 class Configuration:
     def __init__(self):
         self.default_action = FileAction.RENAME_MOVE
         self.use_absolute_paths = False
         self.include_directories = False
         self.prompt_on_actions = True
-
-g_config = Configuration()
-g_index_uid = 0
+        self.simulation_mode = False
+        self.multistage_mode = False
 
 def index_uid():
-    global g_index_uid
     while True:
-        g_index_uid += 1
-        yield "%08d" % g_index_uid
+        index_uid.lastval += 1
+        yield "%08d" % index_uid.lastval
+
+index_uid.lastval = 0
+
+class IOSAbstraction:
+    def ask_for_confirmation(self, prompt): pass
+    def show_error(self, message): pass
+    def show_info(self, message): pass
+    
+    def abspath(self, path): pass
+    def split_path(self, path): pass
+    def rename_move(self, old_path, new_path): pass
+    def copy(self, old_path, new_path): pass
+    def make_link(self, old_path, new_path): pass
+
+class OSAbstraction(IOSAbstraction):
+    def __init__(self, config:Configuration):
+        self._conf = config
+
+    def ask_for_confirmation(self, prompt):
+        stdout.write("%s [y/N]: " % prompt)
+        response = input()
+        if len(response) > 0 and response[0] in ['y', 'Y']:
+            return True
+        else:
+            return False
+
+    def show_error(self, message):
+        print("ERROR: %s" % message)
+
+    def show_info(self, message):
+        print("%s" % message)
+
+    def abspath(self, path):
+        return os.path.abspath(path)
+
+    def split_path(self, path):
+        return (os.path.dirname(path), os.path.basename(path))
+    
+    def rename_move(self, old_path, new_path):
+        if self._conf.simulation_mode:
+            print("mv %s %s" % (old_path, new_path))
+            return True
+        else:
+            try:
+                os.rename(old_path, new_path)
+                return (True, "")
+            except Exception as ex:
+                return (False, str(ex))
+
+    def copy(self, old_path, new_path):
+        print("cp %s %s" % (old_path, new_path))
+
+    def make_link(self, old_path, new_path):
+        print("ln %s %s" % (old_path, new_path))
 
 class FileIndexEntry:
     def __init__(self, current_name, action):
@@ -67,39 +118,6 @@ class FileIndexEntry:
     def add_target_name(self, name, action):
         assert(action in FileAction.ALL_ACTIONS)
         self.target_names.append((name, action))
-
-class IOSAbstraction:
-    def ask_for_confirmation(self, prompt): pass
-    def show_error(self, message): pass
-    def show_info(self, message): pass
-    
-    def abspath(self, path): pass
-    def rename_move(self, old_path, new_path): pass
-    def copy(self, old_path, new_path): pass
-    def make_link(self, old_path, new_path): pass
-
-
-class OSAbstraction(IOSAbstraction):
-    def ask_for_confirmation(self, prompt):
-        pass
-
-    def show_error(self, message):
-        print("ERROR: %s" % message)
-
-    def show_info(self, message):
-        print("%s" % message)
-
-    def abspath(self, path):
-        return os.path.abspath(path)
-    
-    def rename_move(self, old_path, new_path):
-        print("mv %s %s" % (old_path, new_path))
-
-    def copy(self, old_path, new_path):
-        print("cp %s %s" % (old_path, new_path))
-
-    def make_link(self, old_path, new_path):
-        print("ln %s %s" % (old_path, new_path))
 
 class FileIndex:
     def __init__(self, config:Configuration, os_abstraction:IOSAbstraction):
@@ -144,6 +162,9 @@ class FileIndex:
         for entry_id, entry in self._files.items():
             entry.reset()
         for line in user_input:
+            # Skip empty lines and comment lines
+            if len(line) > 0 and line[0] == '#': continue
+
             id, action, name = line.split()
             if id in self._files:
                 entry = self._files[id]
@@ -182,14 +203,34 @@ def get_user_input(user_input_string):
 
 def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration):
     files = file_index.get_all()
+    operations_done = 0
 
     for uid, file in files.items():
         new_target_names = []
         for target_name, action in file.target_names:
 
             if action == FileAction.RENAME_MOVE and file.current_name != target_name:
-                if not conf.prompt_on_actions or os.ask_for_confirmation("Move %s to %s?" % (file.current_name, target_name)):
-                    os.rename_move(file.current_name, target_name)
+                current_dir, current_basename = os.split_path(file.current_name)
+                target_dir, target_basename = os.split_path(target_name)
+
+                msg = ""
+                if current_dir == target_dir:
+                    msg = "Rename \"%s\" to \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+                elif current_dir != target_dir and current_basename == target_basename:
+                    msg = "Move \"%s\" to \"%s\"?" % (file.current_name, target_dir)
+                else:
+                    msg = "Move \"%s\" to \"%s\"?" % (file.current_name, target_name)
+
+                if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
+                    result, error_message = os.rename_move(file.current_name, target_name)
+                    if not result:
+                        new_target_names.append((target_name, action))
+                        msg = "Could not move %s: %s" % (file.current_name, error_message)
+                        os.show_error(msg)
+                        file.remarks.append(msg)
+                    else:
+                        operations_done += 1
+
 
             elif action == FileAction.COPY and file.current_name != target_name:
                 if not conf.prompt_on_actions or os.ask_for_confirmation("Copy %s to %s?" % (file.current_name, target_name)):
@@ -206,40 +247,66 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
 
     file_index.purge()
 
-    return file_index.get_size()
+    return (operations_done, file_index.get_size())
 
 if __name__=="__main__":
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:Ad", ["nonrecursive=", "absolute-paths", "include-dirs"])
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:Admsy", [
+        "nonrecursive=",
+        "absolute-paths",
+        "include-dirs",
+        "multistage",
+        "simulate",
+        "yes-to-all"])
 
     dirs_recursive = []
     dirs_nonrecursive = []
-    os_abs = OSAbstraction()
-    file_index = FileIndex(g_config, os_abs)
+    config = Configuration()
+    os_abs = OSAbstraction(config)
+    file_index = FileIndex(config, os_abs)
 
     for option, value in options:
         print(option, value)
         if option in ['-n', '--nonrecursive']:
             dirs_nonrecursive.append(value)
         if option in ['-A', '--absolute-paths']:
-            g_config.use_absolute_paths = True
+            config.use_absolute_paths = True
         if option in ['-d', '--include-dirs']:
-            g_config.include_directories = True
+            config.include_directories = True
+        if option in ['-m', '--multistage']:
+            config.multistage_mode = True
+        if option in ['-s', '--simulate']:
+            config.simulation_mode = True
+        if option in ['-y', '--yes-to-all']:
+            config.prompt_on_actions = False
 
     for dir_name in remainder:
         dirs_recursive.append(dir_name)
 
     for dir_name in dirs_nonrecursive:
-        file_index.add(get_file_list_nonrecursive(dir_name, g_config.include_directories))
+        file_index.add(get_file_list_nonrecursive(dir_name, config.include_directories))
 
     for dir_name in dirs_recursive:
-        file_index.add(get_file_list_recursive(dir_name, g_config.include_directories))
+        file_index.add(get_file_list_recursive(dir_name, config.include_directories))
         pass
 
-    inp = file_index.generate_user_input()
-    resp = get_user_input(inp)
-    file_index.handle_user_input(resp)
+    while True:
+        inp = file_index.generate_user_input()
+        resp = get_user_input(inp)
+        file_index.handle_user_input(resp)
+        ops_done, remaining_entries = execute_actions(file_index, os_abs, config)
+        if remaining_entries > 0:
+            if config.multistage_mode:
+                if ops_done > 0:
+                    print("%d operations done, %d files not processed, launching the editor again" % (ops_done, remaining_entries))
+                else:
+                    if os_abs.ask_for_confirmation("No operations done, still %d files not processed. Continue?" % remaining_entries) == False:
+                        break
+            else:
+                print("%d files not processed" % remaining_entries)
+                print(file_index.generate_user_input())
+                break
+        else:
+            break
 
-    rem = execute_actions(file_index, os_abs, g_config)
-    print("%d files remaining in index" % rem)
 
 

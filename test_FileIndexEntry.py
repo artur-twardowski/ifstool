@@ -8,8 +8,8 @@ class TestFileIndexEntry(unittest.TestCase):
 
         inp = entry.generate_user_input()
 
-        id_s, action, filename = inp.split()
-        self.assertEqual(int(id_s), entry.get_uid())
+        id, action, filename = inp.split()
+        self.assertEqual(id, entry.get_uid())
         self.assertEqual(action, "r")
         self.assertEqual(filename, "testfile")
 
@@ -22,13 +22,13 @@ class TestFileIndexEntry(unittest.TestCase):
         rows = inp.split("\n")
         self.assertEqual(len(rows), 2, "Input is:\n%s" % inp)
 
-        id_s, action, filename = rows[0].split()
-        self.assertEqual(int(id_s), entry.get_uid())
+        id, action, filename = rows[0].split()
+        self.assertEqual(id, entry.get_uid())
         self.assertEqual(action, "c")
         self.assertEqual(filename, "testfile1")
 
-        id_s, action, filename = rows[1].split()
-        self.assertEqual(int(id_s), entry.get_uid())
+        id, action, filename = rows[1].split()
+        self.assertEqual(id, entry.get_uid())
         self.assertEqual(action, "l")
         self.assertEqual(filename, "testfile2")
 
