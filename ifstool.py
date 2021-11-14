@@ -30,6 +30,7 @@ class Configuration:
         self.simulation_mode = False
         self.multistage_mode = False
         self.create_directories = False
+        self.allow_overwriting = False
 
 def index_uid():
     while True:
@@ -46,6 +47,7 @@ class IOSAbstraction:
     def abspath(self, path): pass
     def isdir(self, path): pass
     def mkdir(self, path): pass
+    def isfile(self, path): pass
     def split_path(self, path): pass
     def rename_move(self, old_path, new_path): pass
     def delete(self, path): pass
@@ -82,6 +84,9 @@ class OSAbstraction(IOSAbstraction):
             return (True, "")
         except Exception as ex:
             return (False, str(ex))
+
+    def isfile(self, path):
+        return os.path.isfile(path)
 
     def split_path(self, path):
         return (os.path.dirname(path), os.path.basename(path))
@@ -231,6 +236,17 @@ def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:
     current_dir, current_basename = os.split_path(current_name)
     target_dir, target_basename = os.split_path(target_name)
     remarks = []
+    overwriting = False
+
+    # Check if target file exists.d 
+    if os.isfile(target_name):
+        if conf.allow_overwriting:
+            overwriting = True
+        else:
+            msg = "Target file \"%s\" already exists.\nUse -o or --allow-overwriting option to force the overwrite." % target_name
+            os.show_error(msg)
+            remarks.append(msg)
+            return (False, remarks)
 
     msg = ""
     if current_dir == target_dir:
@@ -239,6 +255,9 @@ def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:
         msg = "Move \"%s\" to \"%s\"?" % (current_name, target_dir)
     else:
         msg = "Move \"%s\" to \"%s\"?" % (current_name, target_name)
+
+    if overwriting:
+        msg += " Destination file will be overwritten!"
 
     if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
         # If the target directory does not exist, create it when allowed
@@ -319,12 +338,13 @@ def parse_input_args(args:list, config:Configuration):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:Acdmsy", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:Acdmosy", [
         "nonrecursive=",
         "absolute-paths",
         "create-directories",
         "include-dirs",
         "multistage",
+        "allow-overwriting",
         "simulate",
         "yes-to-all"])
 
@@ -340,6 +360,8 @@ def parse_input_args(args:list, config:Configuration):
             config.include_directories = True
         if option in ['-m', '--multistage']:
             config.multistage_mode = True
+        if option in ['-o', '--allow-overwriting']:
+            config.allow_overwriting = True
         if option in ['-s', '--simulate']:
             config.simulation_mode = True
         if option in ['-y', '--yes-to-all']:
