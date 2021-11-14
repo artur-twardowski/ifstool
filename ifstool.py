@@ -1,5 +1,6 @@
 import getopt
 import os
+import shutil
 from sys import argv, stdout
 import tempfile
 import subprocess
@@ -115,10 +116,28 @@ class OSAbstraction(IOSAbstraction):
 
 
     def copy(self, old_path, new_path):
-        print("cp %s %s" % (old_path, new_path))
+        if self._conf.simulation_mode:
+            print("cp %s %s" % (old_path, new_path))
+            return (True, "")
+        else:
+            try:
+                shutil.copyfile(old_path, new_path)
+                return (True, "")
+            except Exception as ex:
+                return (False, str(ex))
 
     def make_link(self, old_path, new_path):
-        print("ln %s %s" % (old_path, new_path))
+        # FIXME  symlink's target must be relative to the path where the symlink
+        # is stored (or absolute)
+        if self._conf.simulation_mode:
+            print("ln -s %s %s" % (old_path, new_path))
+            return (True, "")
+        else:
+            try:
+                os.symlink(old_path, new_path)
+                return (True, "")
+            except Exception as ex:
+                return (False, str(ex))
 
 class FileIndexEntry:
     def __init__(self, current_name, action):
@@ -221,10 +240,11 @@ def get_file_list_recursive(directory:str, include_directories:bool):
 def get_user_input(user_input_string):
     result = []
 
+    editor = os.getenv("EDITOR", "vi")
     tf = tempfile.NamedTemporaryFile("w+")
     tf.write(user_input_string)
     tf.flush()
-    editor = subprocess.run(["vim", tf.name])
+    editor = subprocess.run([editor, tf.name])
     tf.seek(0, 0)
 
     for line in tf:
@@ -232,7 +252,15 @@ def get_user_input(user_input_string):
 
     return result
 
-def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:Configuration):
+def do_action_copy_move_common(current_name:str, target_name:str, action:str, os:IOSAbstraction, conf:Configuration):
+    """
+    Common code covering rename/move, copy and link actions, involving the following sequence of operations:
+      - checking if the destination file will be overwritten
+      - asking the user for confirmation of the operation
+      - creation of the target directory (if does not exist yet and can be created)
+      - executing the action
+      - evaluating the results of operations at each stage
+    """
     current_dir, current_basename = os.split_path(current_name)
     target_dir, target_basename = os.split_path(target_name)
     remarks = []
@@ -250,11 +278,27 @@ def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:
 
     msg = ""
     if current_dir == target_dir:
-        msg = "Rename \"%s\" to \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+        if action == FileAction.RENAME_MOVE:
+            msg = "Rename \"%s\" to \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+        elif action == FileAction.COPY:
+            msg = "Make a copy of \"%s\" as \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+        elif action == FileAction.LINK:
+            msg = "Create a link to \"%s\" as \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+
     elif current_dir != target_dir and current_basename == target_basename:
-        msg = "Move \"%s\" to \"%s\"?" % (current_name, target_dir)
+        if action == FileAction.RENAME_MOVE:
+            msg = "Move \"%s\" to \"%s\"?" % (current_name, target_dir)
+        elif action == FileAction.COPY:
+            msg = "Make a copy of \"%s\" in \"%s\"?" % (current_name, target_dir)
+        elif action == FileAction.LINK:
+            msg = "Create a link to \"%s\" in \"%s\"?" % (current_name, target_dir)
     else:
-        msg = "Move \"%s\" to \"%s\"?" % (current_name, target_name)
+        if action == FileAction.RENAME_MOVE:
+            msg = "Move \"%s\" to \"%s\"?" % (current_name, target_name)
+        elif action == FileAction.COPY:
+            msg = "Make a copy of \"%s\" in \"%s\"?" % (current_name, target_name)
+        elif action == FileAction.LINK:
+            msg = "Create a link to \"%s\" in \"%s\"?" % (current_name, target_name)
 
     if overwriting:
         msg += " Destination file will be overwritten!"
@@ -262,17 +306,23 @@ def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:
     if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
         # If the target directory does not exist, create it when allowed
         if not os.isdir(target_dir) and conf.create_directories:
-            if not conf.prompt_on_actions or os.ask_for_confirmation("Create directory \"%s\"" % target_dir):
+            if not conf.prompt_on_actions or os.ask_for_confirmation("Target directory \"%s\" does not exist. Create it?" % target_dir):
                 result, error_message = os.mkdir(target_dir)
                 if not result:
                     msg = "Could not create directory \"%s\": %s" % (target_dir, error_message)
                     os.show_error(msg)
                     remarks.append(msg)
                     return (False, remarks)
-                
-        result, error_message = os.rename_move(current_name, target_name)
+        
+        if action == FileAction.RENAME_MOVE:
+            result, error_message = os.rename_move(current_name, target_name)
+        elif action == FileAction.COPY:
+            result, error_message = os.copy(current_name, target_name)
+        elif action == FileAction.LINK:
+            result, error_message = os.make_link(current_name, target_name)
+
         if not result:
-            msg = "Could not move %s: %s" % (current_name, error_message)
+            msg = "Could not create the target file %s: %s" % (current_name, error_message)
             os.show_error(msg)
             remarks.append(msg)
             return (False, remarks)
@@ -301,8 +351,10 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
         new_target_names = []
         for target_name, action in file.target_names:
 
-            if action == FileAction.RENAME_MOVE and file.current_name != target_name:
-                result, remarks = do_action_rename(file.current_name, target_name, os, conf)
+            if action in [FileAction.RENAME_MOVE, FileAction.COPY, FileAction.LINK] \
+                    and file.current_name != target_name:
+
+                result, remarks = do_action_copy_move_common(file.current_name, target_name, action, os, conf)
                 if result:
                     operations_done += 1
                 else:
@@ -316,14 +368,6 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
                 else:
                     file.remarks += remarks
                     new_target_names.append((target_name, action))
-
-            elif action == FileAction.COPY and file.current_name != target_name:
-                if not conf.prompt_on_actions or os.ask_for_confirmation("Copy %s to %s?" % (file.current_name, target_name)):
-                    os.copy(file.current_name, target_name)
-            
-            elif action == FileAction.LINK and file.current_name != target_name:
-                if not conf.prompt_on_actions or os.ask_for_confirmation("Create link to %s at %s?" % (file.current_name, target_name)):
-                    os.make_link(file.current_name, target_name)
 
             elif action == FileAction.IGNORE:
                 new_target_names.append((target_name, action))
@@ -394,13 +438,13 @@ if __name__=="__main__":
         if remaining_entries > 0:
             if config.multistage_mode:
                 if ops_done > 0:
-                    print("%d operations done, %d files not processed, launching the editor again" % (ops_done, remaining_entries))
+                    os_abs.show_info("%d operations done, %d files not processed, launching the editor again" % (ops_done, remaining_entries))
                 else:
                     if os_abs.ask_for_confirmation("No operations done, still %d files not processed. Continue?" % remaining_entries) == False:
                         break
             else:
-                print("%d files not processed" % remaining_entries)
-                print(file_index.generate_user_input())
+                os_abs.show_info("%d files not processed" % remaining_entries)
+                os_abs.show_info(file_index.generate_user_input())
                 break
         else:
             break
