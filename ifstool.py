@@ -29,6 +29,7 @@ class Configuration:
         self.prompt_on_actions = True
         self.simulation_mode = False
         self.multistage_mode = False
+        self.create_directories = False
 
 def index_uid():
     while True:
@@ -43,6 +44,8 @@ class IOSAbstraction:
     def show_info(self, message): pass
     
     def abspath(self, path): pass
+    def isdir(self, path): pass
+    def mkdir(self, path): pass
     def split_path(self, path): pass
     def rename_move(self, old_path, new_path): pass
     def copy(self, old_path, new_path): pass
@@ -68,6 +71,16 @@ class OSAbstraction(IOSAbstraction):
 
     def abspath(self, path):
         return os.path.abspath(path)
+    
+    def isdir(self, path):
+        return os.path.isdir(path)
+
+    def mkdir(self, path):
+        try:
+            os.makedirs(path)
+            return [True, ""]
+        except Exception as ex:
+            return (False, str(ex))
 
     def split_path(self, path):
         return (os.path.dirname(path), os.path.basename(path))
@@ -165,7 +178,7 @@ class FileIndex:
             # Skip empty lines and comment lines
             if len(line) > 0 and line[0] == '#': continue
 
-            id, action, name = line.split()
+            id, action, name = line.split(None, 2)
             if id in self._files:
                 entry = self._files[id]
                 entry.add_target_name(name, action)
@@ -201,6 +214,39 @@ def get_user_input(user_input_string):
 
     return result
 
+def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:Configuration):
+    current_dir, current_basename = os.split_path(current_name)
+    target_dir, target_basename = os.split_path(target_name)
+    remarks = []
+
+    msg = ""
+    if current_dir == target_dir:
+        msg = "Rename \"%s\" to \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
+    elif current_dir != target_dir and current_basename == target_basename:
+        msg = "Move \"%s\" to \"%s\"?" % (current_name, target_dir)
+    else:
+        msg = "Move \"%s\" to \"%s\"?" % (current_name, target_name)
+
+    if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
+        # If the target directory does not exist, create it when allowed
+        if not os.isdir(target_dir) and conf.create_directories:
+            if not conf.prompt_on_actions or os.ask_for_confirmation("Create directory \"%s\"" % target_dir):
+                result, error_message = os.mkdir(target_dir)
+                if not result:
+                    msg = "Could not create directory \"%s\": %s" % (target_dir, error_message)
+                    os.show_error(msg)
+                    remarks.append(msg)
+                    return (False, remarks)
+                
+        result, error_message = os.rename_move(current_name, target_name)
+        if not result:
+            msg = "Could not move %s: %s" % (current_name, error_message)
+            os.show_error(msg)
+            remarks.append(msg)
+            return (False, remarks)
+
+    return (True, remarks)
+
 def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration):
     files = file_index.get_all()
     operations_done = 0
@@ -210,27 +256,12 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
         for target_name, action in file.target_names:
 
             if action == FileAction.RENAME_MOVE and file.current_name != target_name:
-                current_dir, current_basename = os.split_path(file.current_name)
-                target_dir, target_basename = os.split_path(target_name)
-
-                msg = ""
-                if current_dir == target_dir:
-                    msg = "Rename \"%s\" to \"%s\" in \"%s\"?" % (current_basename, target_basename, current_dir)
-                elif current_dir != target_dir and current_basename == target_basename:
-                    msg = "Move \"%s\" to \"%s\"?" % (file.current_name, target_dir)
+                result, remarks = do_action_rename(file.current_name, target_name, os, conf)
+                if result:
+                    operations_done += 1
                 else:
-                    msg = "Move \"%s\" to \"%s\"?" % (file.current_name, target_name)
-
-                if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
-                    result, error_message = os.rename_move(file.current_name, target_name)
-                    if not result:
-                        new_target_names.append((target_name, action))
-                        msg = "Could not move %s: %s" % (file.current_name, error_message)
-                        os.show_error(msg)
-                        file.remarks.append(msg)
-                    else:
-                        operations_done += 1
-
+                    file.remarks += remarks
+                    new_target_names.append((target_name, action))
 
             elif action == FileAction.COPY and file.current_name != target_name:
                 if not conf.prompt_on_actions or os.ask_for_confirmation("Copy %s to %s?" % (file.current_name, target_name)):
@@ -249,20 +280,18 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
 
     return (operations_done, file_index.get_size())
 
-if __name__=="__main__":
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:Admsy", [
+def parse_input_args(args:list, config:Configuration):
+    dirs_recursive = []
+    dirs_nonrecursive = []
+
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:Acdmsy", [
         "nonrecursive=",
         "absolute-paths",
+        "create-directories",
         "include-dirs",
         "multistage",
         "simulate",
         "yes-to-all"])
-
-    dirs_recursive = []
-    dirs_nonrecursive = []
-    config = Configuration()
-    os_abs = OSAbstraction(config)
-    file_index = FileIndex(config, os_abs)
 
     for option, value in options:
         print(option, value)
@@ -270,6 +299,8 @@ if __name__=="__main__":
             dirs_nonrecursive.append(value)
         if option in ['-A', '--absolute-paths']:
             config.use_absolute_paths = True
+        if option in ['-c', '--create-directories']:
+            config.create_directories = True
         if option in ['-d', '--include-dirs']:
             config.include_directories = True
         if option in ['-m', '--multistage']:
@@ -282,12 +313,21 @@ if __name__=="__main__":
     for dir_name in remainder:
         dirs_recursive.append(dir_name)
 
+    return (dirs_nonrecursive, dirs_recursive)
+
+
+if __name__=="__main__":
+    config = Configuration()
+    os_abs = OSAbstraction(config)
+    file_index = FileIndex(config, os_abs)
+
+    dirs_nonrecursive, dirs_recursive = parse_input_args(argv[1:], config)
+
     for dir_name in dirs_nonrecursive:
         file_index.add(get_file_list_nonrecursive(dir_name, config.include_directories))
 
     for dir_name in dirs_recursive:
         file_index.add(get_file_list_recursive(dir_name, config.include_directories))
-        pass
 
     while True:
         inp = file_index.generate_user_input()
@@ -307,6 +347,4 @@ if __name__=="__main__":
                 break
         else:
             break
-
-
 
