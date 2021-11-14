@@ -48,6 +48,7 @@ class IOSAbstraction:
     def mkdir(self, path): pass
     def split_path(self, path): pass
     def rename_move(self, old_path, new_path): pass
+    def delete(self, path): pass
     def copy(self, old_path, new_path): pass
     def make_link(self, old_path, new_path): pass
 
@@ -78,7 +79,7 @@ class OSAbstraction(IOSAbstraction):
     def mkdir(self, path):
         try:
             os.makedirs(path)
-            return [True, ""]
+            return (True, "")
         except Exception as ex:
             return (False, str(ex))
 
@@ -88,13 +89,25 @@ class OSAbstraction(IOSAbstraction):
     def rename_move(self, old_path, new_path):
         if self._conf.simulation_mode:
             print("mv %s %s" % (old_path, new_path))
-            return True
+            return (True, "")
         else:
             try:
                 os.rename(old_path, new_path)
                 return (True, "")
             except Exception as ex:
                 return (False, str(ex))
+
+    def delete(self, path):
+        if self._conf.simulation_mode:
+            print("rm %s" % path)
+            return (True, "")
+        else:
+            try:
+                os.remove(path)
+                return (True, "")
+            except Exception as ex:
+                return (False, str(ex))
+
 
     def copy(self, old_path, new_path):
         print("cp %s %s" % (old_path, new_path))
@@ -247,6 +260,20 @@ def do_action_rename(current_name:str, target_name:str, os:IOSAbstraction, conf:
 
     return (True, remarks)
 
+def do_action_delete(current_name:str, os:IOSAbstraction, conf:Configuration):
+    msg = "Delete \"%s\"?" % current_name
+    remarks = []
+
+    if not conf.prompt_on_actions or os.ask_for_confirmation(msg):
+        result, error_message = os.delete(current_name)
+        if not result:
+            msg = "Could not delete \"%s\": %s" % (current_name, error_message)
+            os.show_error(msg)
+            remarks.append(msg)
+            return (False, remarks)
+
+    return (True, remarks)
+
 def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration):
     files = file_index.get_all()
     operations_done = 0
@@ -257,6 +284,14 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
 
             if action == FileAction.RENAME_MOVE and file.current_name != target_name:
                 result, remarks = do_action_rename(file.current_name, target_name, os, conf)
+                if result:
+                    operations_done += 1
+                else:
+                    file.remarks += remarks
+                    new_target_names.append((target_name, action))
+
+            elif action == FileAction.DELETE:
+                result, remarks = do_action_delete(file.current_name, os, conf)
                 if result:
                     operations_done += 1
                 else:
