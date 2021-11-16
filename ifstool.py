@@ -378,19 +378,45 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
 
     return (operations_done, file_index.get_size())
 
+def display_help():
+    print("""IFSTool - Interactive FileSystem Tool v0.1
+A tool that allows to manage large number of files in the directory tree
+using a text editor, in a way similar to interactive rebase feature of Git SCM.
+USAGE: ifstool [options] directory1 [[-n] directory2 [[-n] directory_n]]\n
+Options available:
+  -n, --nonrecursive=dirname  Do not enter subdirectories of the directory specified
+  -A, --absolute-paths        Use absolute paths in the input.
+  -D, --default-action=actn   Select default action for each file:
+                              r - rename/move    d - delete
+                              c - copy           l - link
+                              i - ignore         p - pick
+  -c, --create-directories    Create new directories, if needed.
+  -m, --multistage            Enable multi-stage mode; keep reopening the editor as long
+                              as there are files that have not been processed.
+  -o, --allow-overwriting     Allow overwriting existing files.
+  -s, --simulate              Simulation mode - show the actions that would be done, but without
+                              triggering any actual actions in the filesystem.
+  -y, --yes-to-all            Do not ask for confirmation at actions, assume \"yes\" response
+                              for all questions
+""")
+    exit(1)
+
+
 def parse_input_args(args:list, config:Configuration):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:Acdmosy", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cdmosy", [
         "nonrecursive=",
+        "default-action=",
         "absolute-paths",
         "create-directories",
         "include-dirs",
         "multistage",
         "allow-overwriting",
         "simulate",
-        "yes-to-all"])
+        "yes-to-all",
+        "help"])
 
     for option, value in options:
         print(option, value)
@@ -398,6 +424,12 @@ def parse_input_args(args:list, config:Configuration):
             dirs_nonrecursive.append(value)
         if option in ['-A', '--absolute-paths']:
             config.use_absolute_paths = True
+        if option in ['-D', '--default-action']:
+            if value in FileAction.ALL_ACTIONS:
+                config.default_action = value
+            else:
+                os_abs.show_error("Incorrect action: %s" % value)
+                exit(1)
         if option in ['-c', '--create-directories']:
             config.create_directories = True
         if option in ['-d', '--include-dirs']:
@@ -410,6 +442,8 @@ def parse_input_args(args:list, config:Configuration):
             config.simulation_mode = True
         if option in ['-y', '--yes-to-all']:
             config.prompt_on_actions = False
+        if option in ['--help']:
+            display_help()
 
     for dir_name in remainder:
         dirs_recursive.append(dir_name)
