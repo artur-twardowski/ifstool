@@ -12,15 +12,13 @@ class FileAction:
     COPY = 'c'        # Copy the file
     LINK = 'l'        # Create a symbolic link to the file
     IGNORE = 'i'      # Do not do anything with the file, but keep it in the index
-    PICK= 'p'         # Return the file name (for picking mode)
 
     ALL_ACTIONS=[
             RENAME_MOVE,
             DELETE,
             COPY,
             LINK,
-            IGNORE,
-            PICK]
+            IGNORE]
 
 class Configuration:
     def __init__(self):
@@ -389,7 +387,7 @@ Options available:
   -D, --default-action=actn   Select default action for each file:
                               r - rename/move    d - delete
                               c - copy           l - link
-                              i - ignore         p - pick
+                              i - ignore
   -c, --create-directories    Create new directories, if needed.
   -m, --multistage            Enable multi-stage mode; keep reopening the editor as long
                               as there are files that have not been processed.
@@ -406,12 +404,11 @@ def parse_input_args(args:list, config:Configuration):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cdmosy", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosy", [
         "nonrecursive=",
         "default-action=",
         "absolute-paths",
         "create-directories",
-        "include-dirs",
         "multistage",
         "allow-overwriting",
         "simulate",
