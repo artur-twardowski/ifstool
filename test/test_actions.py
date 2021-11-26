@@ -31,7 +31,6 @@ class TestActions(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(0, len(remarks))
 
-
 if __name__ == "__main__":
     unittest.main()
 
