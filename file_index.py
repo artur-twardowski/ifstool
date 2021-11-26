@@ -16,6 +16,7 @@ class FileIndexEntry:
         self.target_names = [(current_name, action)]
         self.remarks = []
         self.group_id = None
+        self.metadata = {}
 
     def __str__(self):
         return "%s: %s -> %s" % (self.unique_id, self.current_name, self.target_names)
@@ -28,11 +29,23 @@ class FileIndexEntry:
         return self.unique_id
 
     def generate_user_input(self):
+        max_key_len = 0
+        for key in self.metadata:
+            if len(key) > max_key_len:
+                max_key_len = len(key)
+
         result = ""
         for remark in self.remarks:
             result += "# %s\n" % remark
         for name, action in self.target_names:
             result += "%s %c   %s\n" % (self.unique_id, action, name)
+
+        for key, value in self.metadata.items():
+            if str(value).find('\n') != -1:
+                result += "%-*s = <<END\n%s\n<<END\n" % (max_key_len, key, value)
+            else:
+                result += "%-*s = %s\n" % (max_key_len, key, value)
+
 
         return result
 
