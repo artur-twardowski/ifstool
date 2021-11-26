@@ -1,239 +1,13 @@
 import getopt
-import os
-import shutil
-from sys import argv, stdout
+from sys import argv
 import tempfile
 import subprocess
 from copy import deepcopy
 
-class FileAction:
-    RENAME_MOVE = 'r' # Rename or move the file
-    DELETE = 'd'      # Delete the file
-    COPY = 'c'        # Copy the file
-    LINK = 'l'        # Create a symbolic link to the file
-    IGNORE = 'i'      # Do not do anything with the file, but keep it in the index
-
-    ALL_ACTIONS=[
-            RENAME_MOVE,
-            DELETE,
-            COPY,
-            LINK,
-            IGNORE]
-
-class Configuration:
-    def __init__(self):
-        self.default_action = FileAction.RENAME_MOVE
-        self.use_absolute_paths = False
-        self.include_directories = False
-        self.prompt_on_actions = True
-        self.simulation_mode = False
-        self.multistage_mode = False
-        self.create_directories = False
-        self.allow_overwriting = False
-
-def index_uid():
-    while True:
-        index_uid.lastval += 1
-        yield "%08d" % index_uid.lastval
-
-index_uid.lastval = 0
-
-class IOSAbstraction:
-    def ask_for_confirmation(self, prompt): pass
-    def show_error(self, message): pass
-    def show_info(self, message): pass
-    
-    def abspath(self, path): pass
-    def isdir(self, path): pass
-    def mkdir(self, path): pass
-    def isfile(self, path): pass
-    def split_path(self, path): pass
-    def rename_move(self, old_path, new_path): pass
-    def delete(self, path): pass
-    def copy(self, old_path, new_path): pass
-    def make_link(self, old_path, new_path): pass
-
-class OSAbstraction(IOSAbstraction):
-    def __init__(self, config:Configuration):
-        self._conf = config
-
-    def ask_for_confirmation(self, prompt):
-        stdout.write("%s [y/N]: " % prompt)
-        response = input()
-        if len(response) > 0 and response[0] in ['y', 'Y']:
-            return True
-        else:
-            return False
-
-    def show_error(self, message):
-        print("ERROR: %s" % message)
-
-    def show_info(self, message):
-        print("%s" % message)
-
-    def abspath(self, path):
-        return os.path.abspath(path)
-    
-    def isdir(self, path):
-        return os.path.isdir(path)
-
-    def mkdir(self, path):
-        try:
-            os.makedirs(path)
-            return (True, "")
-        except Exception as ex:
-            return (False, str(ex))
-
-    def isfile(self, path):
-        return os.path.isfile(path)
-
-    def split_path(self, path):
-        return (os.path.dirname(path), os.path.basename(path))
-    
-    def rename_move(self, old_path, new_path):
-        if self._conf.simulation_mode:
-            print("mv %s %s" % (old_path, new_path))
-            return (True, "")
-        else:
-            try:
-                os.rename(old_path, new_path)
-                return (True, "")
-            except Exception as ex:
-                return (False, str(ex))
-
-    def delete(self, path):
-        if self._conf.simulation_mode:
-            print("rm %s" % path)
-            return (True, "")
-        else:
-            try:
-                os.remove(path)
-                return (True, "")
-            except Exception as ex:
-                return (False, str(ex))
-
-
-    def copy(self, old_path, new_path):
-        if self._conf.simulation_mode:
-            print("cp %s %s" % (old_path, new_path))
-            return (True, "")
-        else:
-            try:
-                shutil.copyfile(old_path, new_path)
-                return (True, "")
-            except Exception as ex:
-                return (False, str(ex))
-
-    def make_link(self, old_path, new_path):
-        # FIXME  symlink's target must be relative to the path where the symlink
-        # is stored (or absolute)
-        if self._conf.simulation_mode:
-            print("ln -s %s %s" % (old_path, new_path))
-            return (True, "")
-        else:
-            try:
-                os.symlink(old_path, new_path)
-                return (True, "")
-            except Exception as ex:
-                return (False, str(ex))
-
-class FileIndexEntry:
-    def __init__(self, current_name, action):
-        self.unique_id = next(index_uid())
-        self.current_name = current_name
-        self.target_names = [(current_name, action)]
-        self.remarks = []
-
-    def __str__(self):
-        return "%s: %s -> %s" % (self.unique_id, self.current_name, self.target_names)
-
-    def reset(self):
-        self.target_names = []
-        self.remarks = []
-
-    def get_uid(self):
-        return self.unique_id
-
-    def generate_user_input(self):
-        result = ""
-        for remark in self.remarks:
-            result += "# %s\n" % remark
-        for name, action in self.target_names:
-            result += "%s %c   %s\n" % (self.unique_id, action, name)
-
-        return result
-
-    def add_target_name(self, name, action):
-        assert(action in FileAction.ALL_ACTIONS)
-        self.target_names.append((name, action))
-
-class FileIndex:
-    def __init__(self, config:Configuration, os_abstraction:IOSAbstraction):
-        self._files = {}
-        self._config = config
-        self._os = os_abstraction
-
-    def get_all(self):
-        return self._files
-
-    def get_size(self):
-        return len(self._files)
-
-    def add(self, filenames:list, action:str=None):
-        created_entries = []
-
-        if action is None:
-            action = self._config.default_action
-
-        for filename in filenames:
-            if self._config.use_absolute_paths:
-                filename = self._os.abspath(filename)
-            entry = FileIndexEntry(filename, action)
-            self._files[entry.get_uid()] = entry
-            created_entries.append(entry)
-
-        return created_entries
-
-    def purge(self):
-        keys = [key for key in self._files.keys()]
-        for key in keys:
-            if len(self._files[key].target_names) == 0:
-                del self._files[key]
-
-    def generate_user_input(self):
-        result = ""
-        for entry_id, entry in self._files.items():
-            result += entry.generate_user_input()
-        return result
-
-    def handle_user_input(self, user_input:list):
-        for entry_id, entry in self._files.items():
-            entry.reset()
-        for line in user_input:
-            # Skip empty lines and comment lines
-            if len(line) > 0 and line[0] == '#': continue
-
-            id, action, name = line.split(None, 2)
-            if id in self._files:
-                entry = self._files[id]
-                entry.add_target_name(name, action)
-            else:
-                entry = self.add([name], action)[0]
-
-def get_file_list_nonrecursive(directory:str, include_directories:bool):
-    for name in os.listdir(directory):
-        path = os.path.join(directory, name)
-        if os.path.isdir(path) and not include_directories:
-            continue
-        yield path
-
-def get_file_list_recursive(directory:str, include_directories:bool):
-    for root, dirs, files in os.walk(directory):
-        if include_directories:
-            for name in dirs:
-                yield os.path.join(root, name)
-        for name in files:
-            yield os.path.join(root, name)
+from file_index import FileIndex
+from file_action import FileAction
+from configuration import Configuration
+from os_abstraction import *
 
 def get_user_input(user_input_string):
     result = []
@@ -447,8 +221,7 @@ def parse_input_args(args:list, config:Configuration):
 
     return (dirs_nonrecursive, dirs_recursive)
 
-
-if __name__=="__main__":
+def run():
     config = Configuration()
     os_abs = OSAbstraction(config)
     file_index = FileIndex(config, os_abs)
@@ -479,4 +252,7 @@ if __name__=="__main__":
                 break
         else:
             break
+
+if __name__=="__main__":
+    run()
 

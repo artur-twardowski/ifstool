@@ -1,10 +1,10 @@
 import unittest
-import ifstool
+from file_index import FileIndexEntry
 
 class TestFileIndexEntry(unittest.TestCase):
 
     def test_simple_user_input(self):
-        entry = ifstool.FileIndexEntry("testfile", "r")
+        entry = FileIndexEntry("testfile", "r")
 
         inp = entry.generate_user_input()
 
@@ -14,7 +14,7 @@ class TestFileIndexEntry(unittest.TestCase):
         self.assertEqual(filename, "testfile")
 
     def test_complex_user_input(self):
-        entry = ifstool.FileIndexEntry("testfile1", "c")
+        entry = FileIndexEntry("testfile1", "c")
         entry.add_target_name("testfile2", "l")
 
         inp = entry.generate_user_input()
