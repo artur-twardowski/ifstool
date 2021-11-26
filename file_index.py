@@ -15,6 +15,7 @@ class FileIndexEntry:
         self.current_name = current_name
         self.target_names = [(current_name, action)]
         self.remarks = []
+        self.group_id = None
 
     def __str__(self):
         return "%s: %s -> %s" % (self.unique_id, self.current_name, self.target_names)
@@ -44,6 +45,7 @@ class FileIndex:
         self._files = {}
         self._config = config
         self._os = os_abstraction
+        self._groups = []
 
     def get_all(self):
         return self._files
@@ -74,8 +76,23 @@ class FileIndex:
 
     def generate_user_input(self):
         result = ""
-        for entry_id, entry in self._files.items():
-            result += entry.generate_user_input()
+        if len(self._groups) > 0:
+
+            for group in self._groups + [None]:
+                if group is None:
+                    result += "# remaining files\n"
+                else:
+                    result += "# group %s\n" % group
+
+                for entry_id, entry in self._files.items():
+                    if entry.group_id == group:
+                        result += entry.generate_user_input()
+                result += "\n"
+
+        else:
+            for entry_id, entry in self._files.items():
+                result += entry.generate_user_input()
+        
         return result
 
     def handle_user_input(self, user_input:list):
