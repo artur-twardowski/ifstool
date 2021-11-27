@@ -10,4 +10,5 @@ class Configuration:
         self.multistage_mode = False
         self.create_directories = False
         self.allow_overwriting = False
+        self.extensions_chain = []
 

@@ -8,6 +8,8 @@ from file_index import FileIndex
 from file_action import FileAction
 from configuration import Configuration
 from os_abstraction import *
+from extension import Extension, ExtensionParam
+from extensions.df import Extension_df
 
 
 def get_user_input(user_input_string):
@@ -157,7 +159,20 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
     return (operations_done, file_index.get_size())
 
 
+def get_extensions():
+    extensions = {
+            "df": Extension_df
+            }
+    return extensions
+
+
 def display_help():
+    str_extensions = ""
+    for ext_name, ext_class in get_extensions().items():
+        ext = ext_class()
+        assert(isinstance(ext, Extension))
+        str_extensions += " "*30 + "  - %s: %s" % (ext_name, ext.on_name_query())
+
     print("""IFSTool - Interactive FileSystem Tool v0.1
 A tool that allows to manage large number of files in the directory tree
 using a text editor, in a way similar to interactive rebase feature of Git SCM.
@@ -175,17 +190,90 @@ Options available:
   -o, --allow-overwriting     Allow overwriting existing files.
   -s, --simulate              Simulation mode - show the actions that would be done, but without
                               triggering any actual actions in the filesystem.
+  -x, --extension=name:[args] Use an extension. Available extensions are:
+%s
+                              Use --extension=<name>:help for details on the extension
   -y, --yes-to-all            Do not ask for confirmation at actions, assume \"yes\" response
                               for all questions
-""")
+""" % str_extensions)
     exit(1)
 
 
-def parse_input_args(args:list, config:Configuration):
+def show_extension_info(ext: Extension):
+    print("Extension %s" % ext.on_name_query())
+    print(ext.on_description_query())
+
+    params = ext.on_params_query()
+    if len(params) > 0:
+        print("Parameters:")
+        for param in params:
+            assert(isinstance(param, ExtensionParam))
+            print("  %-14s %s" % (param.name, param.description))
+            if param.enum_values is not None:
+                print(" "*17 + "Possible values:")
+                for value, description in param.enum_values.items():
+                    print(" "*17 + "  %-14s %s" % (value, description))
+            if param.default_value is not None:
+                print(" "*17 + "Default value: %s" % param.default_value)
+
+def validate_and_fill(params_dict: dict, extension_interface: list):
+    for ext_param in extension_interface:
+        assert(isinstance(ext_param, ExtensionParam))
+        if ext_param.name not in params_dict and ext_param.default_value is not None:
+            params_dict[ext_param.name] = ext_param.default_value
+
+        if ext_param.enum_values is not None:
+            if params_dict[ext_param.name] not in ext_param.enum_values:
+                valid_items = ""
+                for val in ext_param.enum_values:
+                    valid_items += val+ ", "
+                valid_items = valid_items[:-2]
+                print("Invalid value of %s: %s. Valid values are: %s" % (
+                    ext_param.name,
+                    params_dict[ext_param.name],
+                    valid_items))
+    return params_dict
+
+
+def use_extension(config: Configuration, os: IOSAbstraction, ext_str: str):
+    exts = get_extensions()
+
+    if ext_str.find(':') != -1:
+        ext_name, ext_param_str = ext_str.split(':', 1)
+    else:
+        ext_name = ext_str
+        ext_param_str = None
+
+    if ext_name in exts:
+        extension_obj = exts[ext_name]()
+        if ext_param_str == "help":
+            show_extension_info(extension_obj)
+            exit(1)
+        elif ext_param_str is not None:
+            params = ext_param_str.split(' ')
+            params_dict = {}
+            for param in params:
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                else:
+                    key = param
+                    value = None
+                params_dict[key] = value
+
+            params_dict = validate_and_fill(params_dict, extension_obj.on_params_query())
+            print(params_dict)
+            extension_obj.on_params_passed(params_dict)
+        config.extensions_chain.append(extension_obj)
+    else:
+        os.show_error("No such extension: %s" % extname)
+        exit(1)
+
+
+def parse_input_args(args:list, config:Configuration, os_abs: IOSAbstraction):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosy", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosx:y", [
         "nonrecursive=",
         "default-action=",
         "absolute-paths",
@@ -193,11 +281,11 @@ def parse_input_args(args:list, config:Configuration):
         "multistage",
         "allow-overwriting",
         "simulate",
+        "extension=",
         "yes-to-all",
         "help"])
 
     for option, value in options:
-        print(option, value)
         if option in ['-n', '--nonrecursive']:
             dirs_nonrecursive.append(value)
         if option in ['-A', '--absolute-paths']:
@@ -218,6 +306,8 @@ def parse_input_args(args:list, config:Configuration):
             config.allow_overwriting = True
         if option in ['-s', '--simulate']:
             config.simulation_mode = True
+        if option in ['-x', '--extension']:
+            use_extension(config, os_abs, value)
         if option in ['-y', '--yes-to-all']:
             config.prompt_on_actions = False
         if option in ['--help']:
@@ -233,7 +323,7 @@ def run():
     os_abs = OSAbstraction(config)
     file_index = FileIndex(config, os_abs)
 
-    dirs_nonrecursive, dirs_recursive = parse_input_args(argv[1:], config)
+    dirs_nonrecursive, dirs_recursive = parse_input_args(argv[1:], config, os_abs)
 
     for dir_name in dirs_nonrecursive:
         file_index.add(get_file_list_nonrecursive(dir_name, config.include_directories))
@@ -242,6 +332,8 @@ def run():
         file_index.add(get_file_list_recursive(dir_name, config.include_directories))
 
     while True:
+        for extension in config.extensions_chain:
+            extension.on_index_complete(file_index)
         inp = file_index.generate_user_input()
         resp = get_user_input(inp)
         file_index.handle_user_input(resp)
