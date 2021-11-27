@@ -10,12 +10,13 @@ def index_uid():
 index_uid.lastval = 0
 
 class FileIndexEntry:
-    def __init__(self, current_name, action):
-        self.unique_id = next(index_uid())
+    def __init__(self, current_name, action, index = None):
+        self._index = index
+        self._unique_id = next(index_uid())
         self.current_name = current_name
         self.target_names = [(current_name, action)]
         self.remarks = []
-        self.group_id = None
+        self._group_id = None
         self.metadata = {}
 
     def __str__(self):
@@ -26,7 +27,10 @@ class FileIndexEntry:
         self.remarks = []
 
     def get_uid(self):
-        return self.unique_id
+        return self._unique_id
+
+    def get_group_id(self):
+        return self._group_id
 
     def generate_user_input(self):
         max_key_len = 0
@@ -38,7 +42,7 @@ class FileIndexEntry:
         for remark in self.remarks:
             result += "# %s\n" % remark
         for name, action in self.target_names:
-            result += "%s %c   %s\n" % (self.unique_id, action, name)
+            result += "%s %c   %s\n" % (self._unique_id, action, name)
 
         for key, value in self.metadata.items():
             if str(value).find('\n') != -1:
@@ -46,12 +50,15 @@ class FileIndexEntry:
             else:
                 result += "%-*s = %s\n" % (max_key_len, key, value)
 
-
         return result
 
     def add_target_name(self, name, action):
         assert(action in FileAction.ALL_ACTIONS)
         self.target_names.append((name, action))
+
+    def assign_to_group(self, group_id):
+        self._index.register_group(group_id)
+        self._group_id = group_id
 
 class FileIndex:
     def __init__(self, config:Configuration, os_abstraction:IOSAbstraction):
@@ -98,7 +105,7 @@ class FileIndex:
                     result += "# group %s\n" % group
 
                 for entry_id, entry in self._files.items():
-                    if entry.group_id == group:
+                    if entry.get_group_id() == group:
                         result += entry.generate_user_input()
                 result += "\n"
 
@@ -121,4 +128,8 @@ class FileIndex:
                 entry.add_target_name(name, action)
             else:
                 entry = self.add([name], action)[0]
+
+    def register_group(self, group_name):
+        if group_name in self._groups:
+            self._groups.append(group_name)
 

@@ -168,6 +168,7 @@ Options available:
   -o, --allow-overwriting     Allow overwriting existing files.
   -s, --simulate              Simulation mode - show the actions that would be done, but without
                               triggering any actual actions in the filesystem.
+  -x, --extension=extname     Use the extension by the name specified
   -y, --yes-to-all            Do not ask for confirmation at actions, assume \"yes\" response
                               for all questions
 """)
@@ -178,7 +179,7 @@ def parse_input_args(args:list, config:Configuration):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosy", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosxy", [
         "nonrecursive=",
         "default-action=",
         "absolute-paths",
@@ -186,6 +187,7 @@ def parse_input_args(args:list, config:Configuration):
         "multistage",
         "allow-overwriting",
         "simulate",
+        "extension",
         "yes-to-all",
         "help"])
 
@@ -211,6 +213,8 @@ def parse_input_args(args:list, config:Configuration):
             config.allow_overwriting = True
         if option in ['-s', '--simulate']:
             config.simulation_mode = True
+        if option in ['-x', '--extension']:
+            pass
         if option in ['-y', '--yes-to-all']:
             config.prompt_on_actions = False
         if option in ['--help']:
