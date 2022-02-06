@@ -3,11 +3,12 @@ import shutil
 from configuration import Configuration
 from sys import stdout
 
+
 class IOSAbstraction:
     def ask_for_confirmation(self, prompt): pass
     def show_error(self, message): pass
     def show_info(self, message): pass
-    
+
     def abspath(self, path): pass
     def isdir(self, path): pass
     def mkdir(self, path): pass
@@ -18,8 +19,9 @@ class IOSAbstraction:
     def copy(self, old_path, new_path): pass
     def make_link(self, old_path, new_path): pass
 
+
 class OSAbstraction(IOSAbstraction):
-    def __init__(self, config:Configuration):
+    def __init__(self, config: Configuration):
         self._conf = config
 
     def ask_for_confirmation(self, prompt):
@@ -38,7 +40,7 @@ class OSAbstraction(IOSAbstraction):
 
     def abspath(self, path):
         return os.path.abspath(path)
-    
+
     def isdir(self, path):
         return os.path.isdir(path)
 
@@ -54,7 +56,7 @@ class OSAbstraction(IOSAbstraction):
 
     def split_path(self, path):
         return (os.path.dirname(path), os.path.basename(path))
-    
+
     def rename_move(self, old_path, new_path):
         if self._conf.simulation_mode:
             print("mv %s %s" % (old_path, new_path))
@@ -76,7 +78,6 @@ class OSAbstraction(IOSAbstraction):
                 return (True, "")
             except Exception as ex:
                 return (False, str(ex))
-
 
     def copy(self, old_path, new_path):
         if self._conf.simulation_mode:
@@ -101,18 +102,19 @@ class OSAbstraction(IOSAbstraction):
             except Exception as ex:
                 return (False, str(ex))
 
-def get_file_list_nonrecursive(directory:str, include_directories:bool):
+
+def get_file_list_nonrecursive(directory: str, include_directories: bool):
     for name in os.listdir(directory):
         path = os.path.join(directory, name)
         if os.path.isdir(path) and not include_directories:
             continue
         yield path
 
-def get_file_list_recursive(directory:str, include_directories:bool):
+
+def get_file_list_recursive(directory: str, include_directories: bool):
     for root, dirs, files in os.walk(directory):
         if include_directories:
             for name in dirs:
                 yield os.path.join(root, name)
         for name in files:
             yield os.path.join(root, name)
-

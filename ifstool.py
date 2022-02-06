@@ -1,18 +1,19 @@
 import getopt
 from sys import argv
+from os import getenv
 import tempfile
 import subprocess
-from copy import deepcopy
 
 from file_index import FileIndex
 from file_action import FileAction
 from configuration import Configuration
 from os_abstraction import *
 
+
 def get_user_input(user_input_string):
     result = []
 
-    editor = os.getenv("EDITOR", "vi")
+    editor = getenv("EDITOR", "vi")
     tf = tempfile.NamedTemporaryFile("w+")
     tf.write(user_input_string)
     tf.flush()
@@ -24,12 +25,15 @@ def get_user_input(user_input_string):
 
     return result
 
-def do_action_copy_move_common(current_name:str, target_name:str, action:str, os:IOSAbstraction, conf:Configuration):
+
+def do_action_copy_move_common(current_name: str, target_name: str, action: str, os: IOSAbstraction, conf: Configuration):
     """
-    Common code covering rename/move, copy and link actions, involving the following sequence of operations:
+    Common code covering rename/move, copy and link actions, involving
+    the following sequence of operations:
       - checking if the destination file will be overwritten
       - asking the user for confirmation of the operation
-      - creation of the target directory (if does not exist yet and can be created)
+      - creation of the target directory (if does not exist yet and can
+        be created)
       - executing the action
       - evaluating the results of operations at each stage
     """
@@ -101,7 +105,8 @@ def do_action_copy_move_common(current_name:str, target_name:str, action:str, os
 
     return (True, remarks)
 
-def do_action_delete(current_name:str, os:IOSAbstraction, conf:Configuration):
+
+def do_action_delete(current_name: str, os: IOSAbstraction, conf: Configuration):
     msg = "Delete \"%s\"?" % current_name
     remarks = []
 
@@ -115,7 +120,8 @@ def do_action_delete(current_name:str, os:IOSAbstraction, conf:Configuration):
 
     return (True, remarks)
 
-def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration):
+
+def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configuration):
     files = file_index.get_all()
     operations_done = 0
 
@@ -149,6 +155,7 @@ def execute_actions(file_index:FileIndex, os:IOSAbstraction, conf:Configuration)
     file_index.purge()
 
     return (operations_done, file_index.get_size())
+
 
 def display_help():
     print("""IFSTool - Interactive FileSystem Tool v0.1
