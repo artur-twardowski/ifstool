@@ -90,14 +90,13 @@ class OSAbstraction(IOSAbstraction):
                 return (False, str(ex))
 
     def make_link(self, old_path, new_path):
-        # FIXME  symlink's target must be relative to the path where the symlink
-        # is stored (or absolute)
+        dest_path = os.path.relpath(old_path, os.path.dirname(new_path))
         if self._conf.simulation_mode:
-            print("ln -s %s %s" % (old_path, new_path))
+            print("ln -s %s %s" % (dest_path, new_path))
             return (True, "")
         else:
             try:
-                os.symlink(old_path, new_path)
+                os.symlink(dest_path, new_path)
                 return (True, "")
             except Exception as ex:
                 return (False, str(ex))
