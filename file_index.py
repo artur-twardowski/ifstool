@@ -88,11 +88,18 @@ class FileIndex:
                 filename = self._os.abspath(filename)
 
             do_add_file = True
-            for ext in self._config.extensions_chain:
-                do_add_file = do_add_file and ext.before_file_added(filename)
+            try:
+                open(filename, "r")
+            except FileNotFoundError as ex:
+                self._os.show_warning("Cannot open %s - insufficient permissions or broken symlink. Discarding" % filename)
+                do_add_file = False
 
-                if not do_add_file:
-                    self._os.show_info("File %s was discarded from index by extension %s" % (filename, ext.on_name_query()))
+            if do_add_file:
+                for ext in self._config.extensions_chain:
+                    do_add_file = do_add_file and ext.before_file_added(filename)
+
+                    if not do_add_file:
+                        self._os.show_info("File %s was discarded from index by extension %s" % (filename, ext.on_name_query()))
 
             if do_add_file:
                 entry = FileIndexEntry(filename, action, self)

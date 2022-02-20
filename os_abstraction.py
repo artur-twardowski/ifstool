@@ -7,6 +7,7 @@ from sys import stdout
 class IOSAbstraction:
     def ask_for_confirmation(self, prompt): pass
     def show_error(self, message): pass
+    def show_warning(self, message): pass
     def show_info(self, message): pass
 
     def abspath(self, path): pass
@@ -34,6 +35,9 @@ class OSAbstraction(IOSAbstraction):
 
     def show_error(self, message):
         print("ERROR: %s" % message)
+
+    def show_warning(self, message):
+        print("WARNING: %s" % message)
 
     def show_info(self, message):
         print("%s" % message)
