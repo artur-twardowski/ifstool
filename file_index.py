@@ -89,7 +89,8 @@ class FileIndex:
 
             do_add_file = True
             try:
-                open(filename, "r")
+                if not self._os.isdir(filename):
+                    open(filename, "r")
             except FileNotFoundError as ex:
                 self._os.show_warning("Cannot open %s - insufficient permissions or broken symlink. Discarding" % filename)
                 do_add_file = False

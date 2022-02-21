@@ -116,9 +116,15 @@ def get_file_list_nonrecursive(directory: str, include_directories: bool):
 
 
 def get_file_list_recursive(directory: str, include_directories: bool):
-    for root, dirs, files in os.walk(directory):
-        if include_directories:
-            for name in dirs:
-                yield os.path.join(root, name)
-        for name in files:
-            yield os.path.join(root, name)
+    stdout.write("\x1b[0G\x1b[0KEntering " + directory)
+    stdout.flush()
+    for name in os.listdir(directory):
+        path = os.path.join(directory, name)
+        if os.path.isdir(path):
+            if include_directories:
+                yield path
+            yield from get_file_list_recursive(path, include_directories)
+        else:
+            yield path
+
+
