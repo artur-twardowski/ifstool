@@ -195,6 +195,7 @@ Options available:
   -x, --extension=name:[args] Use an extension. Available extensions are:
 %s
                               Use --extension=<name>:help for details on the extension
+  -x, --extension=extname     Use the extension by the name specified
   -y, --yes-to-all            Do not ask for confirmation at actions, assume \"yes\" response
                               for all questions
 """ % str_extensions)
