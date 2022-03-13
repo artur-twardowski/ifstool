@@ -10,6 +10,7 @@ from configuration import Configuration
 from os_abstraction import *
 from extension import Extension, ExtensionParam
 from extensions.df import Extension_df
+from extensions.cadf.audio import Extension_cadf_audio
 
 
 def get_user_input(user_input_string):
@@ -161,7 +162,8 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
 
 def get_extensions():
     extensions = {
-            "df": Extension_df
+            "df": Extension_df,
+            "cadf.audio": Extension_cadf_audio
             }
     return extensions
 
@@ -171,7 +173,7 @@ def display_help():
     for ext_name, ext_class in get_extensions().items():
         ext = ext_class()
         assert(isinstance(ext, Extension))
-        str_extensions += " "*30 + "  - %s: %s" % (ext_name, ext.on_name_query())
+        str_extensions += " "*30 + "  - %s: %s\n" % (ext_name, ext.on_name_query())
 
     print("""IFSTool - Interactive FileSystem Tool v0.1
 A tool that allows to manage large number of files in the directory tree
@@ -265,7 +267,7 @@ def use_extension(config: Configuration, os: IOSAbstraction, ext_str: str):
             extension_obj.on_params_passed(params_dict)
         config.extensions_chain.append(extension_obj)
     else:
-        os.show_error("No such extension: %s" % extname)
+        os.show_error("No such extension: %s" % ext_name)
         exit(1)
 
 
