@@ -2,9 +2,10 @@ from extension import Extension, ExtensionParam
 from file_index import FileIndex, FileIndexEntry
 import hashlib
 import io
+from extensions.df import Extension_df
 
 
-class Extension_cadf_audio(Extension):
+class Extension_cadf_audio(Extension_df):
     READ_CHUNK_SIZE = 16384
     UNIQUE_FILES_POLICIES = ["drop", "ungroup", "group"]
 
@@ -17,7 +18,7 @@ class Extension_cadf_audio(Extension):
     MP3_SYNC_WORD_CONTENT = 0xFFF0
 
     def __init__(self):
-        self._unique_files_policy = "ungroup"
+        Extension_df.__init__(self)
 
     def on_name_query(self):
         return "Content-Aware Duplicate Finder for audio files"
@@ -28,15 +29,7 @@ class Extension_cadf_audio(Extension):
                 "audio files which have the same content, but may be tagged differently."
 
     def on_params_query(self):
-        return [
-            ExtensionParam("unique",
-                "How the unique files (ie. files that have no duplicates) should be presented in the index",
-                values={
-                    "drop": "Remove them from the index, so that only duplicates will be shown",
-                    "ungroup": "Keep them in the index, but ungroup them (they will be placed in \"remaining files\" section)",
-                    "group": "Keep them in the index grouped, even though they will be the only ones in the group"
-                }, default="ungroup")
-        ]
+        return Extension_df.on_params_query(self);
 
     def before_file_added(self, filename):
         filename_lo = filename.lower()
@@ -70,7 +63,6 @@ class Extension_cadf_audio(Extension):
                     raise Exception("BUG: Loop stuck at offset %d" % offset)
                 last_loop_offset = offset
                 
-
                 # Check if ID3v2 region is present, and skip it to reach audio data
                 # ID3 header consists of 10 bytes: mmmvvxllll
                 # where:
@@ -158,14 +150,4 @@ class Extension_cadf_audio(Extension):
 
         entry.assign_to_group(h.hexdigest())
 
-    def on_index_complete(self, index: FileIndex):
-        groups, ungrouped = index.get_files_by_groups()
-
-        for group, entries_in_group in groups.items():
-            if len(entries_in_group) == 1:
-                if self._unique_files_policy == "ungroup":
-                    entries_in_group[0].ungroup()
-                if self._unique_files_policy == "drop":
-                    index.remove(entries_in_group[0])
-        index.purge()
 
