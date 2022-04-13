@@ -67,6 +67,7 @@ class FileIndexEntry:
 class FileIndex:
     def __init__(self, config:Configuration, os_abstraction:IOSAbstraction):
         self._files = {}
+        self._files_to_postprocess = []
         self._config = config
         self._os = os_abstraction
         self._groups = []
@@ -106,11 +107,25 @@ class FileIndex:
                 entry = FileIndexEntry(filename, action, self)
                 self._files[entry.get_uid()] = entry
                 created_entries.append(entry)
-
-                for ext in self._config.extensions_chain:
-                    ext.after_file_added(entry)
+                self._files_to_postprocess.append(entry.get_uid())
 
         return created_entries
+
+    def post_add_pop(self):
+        if len(self._files_to_postprocess) == 0:
+            return False
+
+        entry = self._files[self._files_to_postprocess.pop(0)]
+        for ext in self._config.extensions_chain:
+            ext.after_file_added(entry)
+
+        return True
+
+    def get_index_size(self):
+        return len(self._files)
+
+    def get_postprocess_queue_size(self):
+        return len(self._files_to_postprocess)
 
     def remove(self, item):
         if isinstance(item, FileIndexEntry):

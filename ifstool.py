@@ -11,6 +11,7 @@ from os_abstraction import *
 from extension import Extension, ExtensionParam
 from extensions.df import Extension_df
 from extensions.cadf.audio import Extension_cadf_audio
+from console_output import print_status, create_progress_bar
 
 
 def get_user_input(user_input_string):
@@ -333,6 +334,14 @@ def run():
 
     for dir_name in dirs_recursive:
         file_index.add(get_file_list_recursive(dir_name, config.include_directories))
+
+    while file_index.post_add_pop():
+        total_files = file_index.get_index_size()
+        files_postprocessed = total_files - file_index.get_postprocess_queue_size()
+        print_status("Post-processing: %s %3d%%" % (
+            create_progress_bar(files_postprocessed, total_files, 50),
+            files_postprocessed * 100 / total_files))
+
 
     while True:
         for extension in config.extensions_chain:

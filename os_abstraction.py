@@ -2,6 +2,7 @@ import os
 import shutil
 from configuration import Configuration
 from sys import stdout
+from console_output import print_error, print_warning, print_message, print_status
 
 
 class IOSAbstraction:
@@ -34,13 +35,13 @@ class OSAbstraction(IOSAbstraction):
             return False
 
     def show_error(self, message):
-        print("ERROR: %s" % message)
+        print_error("ERROR: %s" % message)
 
     def show_warning(self, message):
-        print("WARNING: %s" % message)
+        print_warning("WARNING: %s" % message)
 
     def show_info(self, message):
-        print("%s" % message)
+        print_message("%s" % message)
 
     def abspath(self, path):
         return os.path.abspath(path)
@@ -116,7 +117,7 @@ def get_file_list_nonrecursive(directory: str, include_directories: bool):
 
 
 def get_file_list_recursive(directory: str, include_directories: bool):
-    stdout.write("\x1b[0G\x1b[0KEntering " + directory)
+    print_status("Entering %s" % directory)
     stdout.flush()
     for name in os.listdir(directory):
         path = os.path.join(directory, name)
