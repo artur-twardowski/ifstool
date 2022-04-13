@@ -12,7 +12,8 @@ from extension import Extension, ExtensionParam
 from extensions.df import Extension_df
 from extensions.cadf.audio import Extension_cadf_audio
 from console_output import print_status, create_progress_bar
-
+from threading import Thread
+from time import sleep
 
 def get_user_input(user_input_string):
     result = []
@@ -277,11 +278,12 @@ def parse_input_args(args:list, config:Configuration, os_abs: IOSAbstraction):
     dirs_recursive = []
     dirs_nonrecursive = []
 
-    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cmosx:y", [
+    options, remainder = getopt.gnu_getopt(argv[1:], "n:AD:cdj:mosx:y", [
         "nonrecursive=",
         "default-action=",
         "absolute-paths",
         "create-directories",
+        "jobs",
         "multistage",
         "allow-overwriting",
         "simulate",
@@ -304,6 +306,8 @@ def parse_input_args(args:list, config:Configuration, os_abs: IOSAbstraction):
             config.create_directories = True
         if option in ['-d', '--include-dirs']:
             config.include_directories = True
+        if option in ['-j', '--jobs']:
+            config.postprocess_num_threads = int(value)
         if option in ['-m', '--multistage']:
             config.multistage_mode = True
         if option in ['-o', '--allow-overwriting']:
@@ -322,12 +326,40 @@ def parse_input_args(args:list, config:Configuration, os_abs: IOSAbstraction):
 
     return (dirs_nonrecursive, dirs_recursive)
 
+_index_fully_populated = False
+
+
+def postproc_worker(file_index: FileIndex, instance_id: int):
+    global _index_fully_populated
+    while file_index.post_add_pop() or not _index_fully_populated:
+        if _index_fully_populated:
+            if instance_id == 0:
+                total_files = file_index.get_index_size()
+                files_postprocessed = total_files - file_index.get_postprocess_queue_size()
+                print_status("Post-processing: %s %3d%%" % (
+                    create_progress_bar(files_postprocessed, total_files, 50),
+                    files_postprocessed * 100 / total_files))
+        else:
+            # simple rate limiting, preventing the worker threads from consuming to much IO
+            # while the index is still being built.
+            sleep(0.05)
+
 def run():
+    global _index_fully_populated
     config = Configuration()
     os_abs = OSAbstraction(config)
     file_index = FileIndex(config, os_abs)
 
     dirs_nonrecursive, dirs_recursive = parse_input_args(argv[1:], config, os_abs)
+
+    # Start worker threads immediately, so that post-processing can start (with reduced
+    # throughput) while the index is still being built
+    postproc_workers = []
+    for thread_id in range(0, config.postprocess_num_threads):
+        thread = Thread(target=postproc_worker, args=(file_index, thread_id))
+        thread.start()
+        postproc_workers.append(thread)
+    print_message("Started %d threads" % len(postproc_workers))
 
     for dir_name in dirs_nonrecursive:
         file_index.add(get_file_list_nonrecursive(dir_name, config.include_directories))
@@ -335,13 +367,10 @@ def run():
     for dir_name in dirs_recursive:
         file_index.add(get_file_list_recursive(dir_name, config.include_directories))
 
-    while file_index.post_add_pop():
-        total_files = file_index.get_index_size()
-        files_postprocessed = total_files - file_index.get_postprocess_queue_size()
-        print_status("Post-processing: %s %3d%%" % (
-            create_progress_bar(files_postprocessed, total_files, 50),
-            files_postprocessed * 100 / total_files))
+    _index_fully_populated = True
 
+    for worker in postproc_workers:
+        worker.join()
 
     while True:
         for extension in config.extensions_chain:
