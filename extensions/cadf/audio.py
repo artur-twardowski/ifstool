@@ -3,6 +3,7 @@ from file_index import FileIndex, FileIndexEntry
 import hashlib
 import io
 from extensions.df import Extension_df
+from console_output import print_warning
 
 
 class Extension_cadf_audio(Extension_df):
@@ -118,7 +119,7 @@ class Extension_cadf_audio(Extension_df):
                         structure.append( (initial_offset, offset-initial_offset, "Zero-padding") )
                     else:
                         structure.append( (offset, 0, "Unknown content starting with %04x" % sync_word))
-                        print("Unexpected data found in %s, determination of audio content might be inaccurate" % filename)
+                        print_warning("Unexpected data found in %s, determination of audio content might be inaccurate" % filename)
                         break
 
             # Check if ID3 (v1) region is present
@@ -127,7 +128,6 @@ class Extension_cadf_audio(Extension_df):
             if id3_magic == b'TAG':
                 length -= 128
         return offset, length, structure
-
 
     
     def after_file_added(self, entry):

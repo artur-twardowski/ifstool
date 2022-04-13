@@ -2,7 +2,8 @@ import os
 import shutil
 from configuration import Configuration
 from sys import stdout
-from console_output import print_error, print_warning, print_message, print_status
+from console_output import print_error, print_warning, print_debug
+from console_output import print_message, print_status, print_prompt
 
 
 class IOSAbstraction:
@@ -27,7 +28,7 @@ class OSAbstraction(IOSAbstraction):
         self._conf = config
 
     def ask_for_confirmation(self, prompt):
-        stdout.write("%s [y/N]: " % prompt)
+        print_prompt(prompt, ["&yes", "&no"], "n")
         response = input()
         if len(response) > 0 and response[0] in ['y', 'Y']:
             return True
@@ -63,8 +64,8 @@ class OSAbstraction(IOSAbstraction):
         return (os.path.dirname(path), os.path.basename(path))
 
     def rename_move(self, old_path, new_path):
+        print_debug("mv %s %s" % (old_path, new_path))
         if self._conf.simulation_mode:
-            print("mv %s %s" % (old_path, new_path))
             return (True, "")
         else:
             try:
@@ -74,8 +75,8 @@ class OSAbstraction(IOSAbstraction):
                 return (False, str(ex))
 
     def delete(self, path):
+        print_debug("rm %s" % path)
         if self._conf.simulation_mode:
-            print("rm %s" % path)
             return (True, "")
         else:
             try:
@@ -85,8 +86,8 @@ class OSAbstraction(IOSAbstraction):
                 return (False, str(ex))
 
     def copy(self, old_path, new_path):
+        print_debug("cp %s %s" % (old_path, new_path))
         if self._conf.simulation_mode:
-            print("cp %s %s" % (old_path, new_path))
             return (True, "")
         else:
             try:
@@ -97,8 +98,8 @@ class OSAbstraction(IOSAbstraction):
 
     def make_link(self, old_path, new_path):
         dest_path = os.path.relpath(old_path, os.path.dirname(new_path))
+        print_debug("ln -s %s %s" % (dest_path, new_path))
         if self._conf.simulation_mode:
-            print("ln -s %s %s" % (dest_path, new_path))
             return (True, "")
         else:
             try:
