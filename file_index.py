@@ -2,6 +2,7 @@ from configuration import Configuration
 from os_abstraction import IOSAbstraction
 from file_action import FileAction
 from extension import Extension
+from console_output import print_debug
 
 def index_uid():
     while True:
@@ -101,7 +102,7 @@ class FileIndex:
                     do_add_file = do_add_file and ext.before_file_added(filename)
 
                     if not do_add_file:
-                        self._os.show_info("File %s was discarded from index by extension %s" % (filename, ext.on_name_query()))
+                        print_debug("File %s was discarded from index by extension %s" % (filename, ext.on_name_query()))
 
             if do_add_file:
                 entry = FileIndexEntry(filename, action, self)
@@ -122,9 +123,15 @@ class FileIndex:
         return True
 
     def get_index_size(self):
+        """
+        Returns the size of index
+        """
         return len(self._files)
 
     def get_postprocess_queue_size(self):
+        """
+        Returns the number of files yet to be post-processed
+        """
         return len(self._files_to_postprocess)
 
     def remove(self, item):

@@ -8,9 +8,6 @@ from console_output import print_message, print_status, print_prompt
 
 class IOSAbstraction:
     def ask_for_confirmation(self, prompt): pass
-    def show_error(self, message): pass
-    def show_warning(self, message): pass
-    def show_info(self, message): pass
 
     def abspath(self, path): pass
     def isdir(self, path): pass
@@ -34,15 +31,6 @@ class OSAbstraction(IOSAbstraction):
             return True
         else:
             return False
-
-    def show_error(self, message):
-        print_error("ERROR: %s" % message)
-
-    def show_warning(self, message):
-        print_warning("WARNING: %s" % message)
-
-    def show_info(self, message):
-        print_message("%s" % message)
 
     def abspath(self, path):
         return os.path.abspath(path)
