@@ -2,8 +2,8 @@ import os
 import shutil
 from configuration import Configuration
 from sys import stdout
-from console_output import print_error, print_warning, print_debug
-from console_output import print_message, print_status, print_prompt
+from console_output import print_debug
+from console_output import print_status, print_prompt
 
 
 class IOSAbstraction:
@@ -116,5 +116,3 @@ def get_file_list_recursive(directory: str, include_directories: bool):
             yield from get_file_list_recursive(path, include_directories)
         else:
             yield path
-
-

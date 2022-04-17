@@ -2,12 +2,15 @@ from sys import stdout
 
 _last_line_is_status = False
 
+
 def _ansi_cseq(*args):
     for s in args:
         stdout.write("\x1b[%s" % s)
 
+
 def _reset_current_line():
     _ansi_cseq("0G", "0m", "0K")
+
 
 def _format(formatspec, do_print=True):
     if do_print:
@@ -16,7 +19,7 @@ def _format(formatspec, do_print=True):
         return "\x1b[%s" % formatspec
 
 
-def print_message(message, formatting = None):
+def print_message(message, formatting=None):
     global _last_line_is_status
     if _last_line_is_status:
         _reset_current_line()
@@ -61,7 +64,6 @@ def print_prompt(prompt, options, default_option):
     stdout.flush()
 
 
-
 def print_status(status):
     global _last_line_is_status
 
@@ -91,10 +93,4 @@ def create_progress_bar(position, maximum, width):
         result += " "
 
     return "[%s]" % result
-
-if __name__ == "__main__":
-    for s in range(0, 1000):
-        print(create_progress_bar(s, 1000, 40))
-
-
 

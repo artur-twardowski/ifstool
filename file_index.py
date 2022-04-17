@@ -1,18 +1,19 @@
 from configuration import Configuration
 from os_abstraction import IOSAbstraction
 from file_action import FileAction
-from extension import Extension
-from console_output import print_debug
+from console_output import print_debug, print_warning
+
 
 def index_uid():
     while True:
         index_uid.lastval += 1
         yield "%08d" % index_uid.lastval
 
+
 index_uid.lastval = 0
 
 class FileIndexEntry:
-    def __init__(self, current_name, action, index = None):
+    def __init__(self, current_name, action, index=None):
         self._index = index
         self._unique_id = next(index_uid())
         self.current_name = current_name
@@ -65,8 +66,9 @@ class FileIndexEntry:
     def ungroup(self):
         self._group_id = None
 
+
 class FileIndex:
-    def __init__(self, config:Configuration, os_abstraction:IOSAbstraction):
+    def __init__(self, config: Configuration, os_abstraction: IOSAbstraction):
         self._files = {}
         self._files_to_postprocess = []
         self._config = config
@@ -79,7 +81,7 @@ class FileIndex:
     def get_size(self):
         return len(self._files)
 
-    def add(self, filenames:list, action:str=None):
+    def add(self, filenames: list, action: str = None):
         created_entries = []
 
         if action is None:
@@ -94,7 +96,8 @@ class FileIndex:
                 if not self._os.isdir(filename):
                     open(filename, "r")
             except FileNotFoundError as ex:
-                self._os.show_warning("Cannot open %s - insufficient permissions or broken symlink. Discarding" % filename)
+                print_warning("Cannot open %s - insufficient permissions or broken symlink (%s). Discarding" % (
+                    filename, str(ex)))
                 do_add_file = False
 
             if do_add_file:

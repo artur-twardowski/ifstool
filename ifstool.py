@@ -6,17 +6,20 @@ import subprocess
 from file_index import FileIndex
 from file_action import FileAction
 from configuration import Configuration
-from os_abstraction import *
+from os_abstraction import IOSAbstraction, OSAbstraction
 from extension import Extension
 from extension_handler import use_extension, get_extensions
-from console_output import print_status, create_progress_bar
+from console_output import print_status, create_progress_bar, print_message
+from console_output import print_error
 from threading import Thread
 from time import sleep
+from os_abstraction import get_file_list_recursive, get_file_list_nonrecursive
+
 
 def get_user_input(user_input_string, editor_cmd):
     result = []
 
-    editor = editor_cmd # TODO: parse command with arguments
+    editor = editor_cmd  # TODO: parse command with arguments
     tf = tempfile.NamedTemporaryFile("w+")
     tf.write(user_input_string)
     tf.flush()
@@ -51,7 +54,7 @@ def do_action_copy_move_common(current_name: str, target_name: str, action: str,
             overwriting = True
         else:
             msg = "Target file \"%s\" already exists.\nUse -o or --allow-overwriting option to force the overwrite." % target_name
-            os.show_error(msg)
+            print_error(msg)
             remarks.append(msg)
             return (False, remarks)
 
@@ -89,7 +92,7 @@ def do_action_copy_move_common(current_name: str, target_name: str, action: str,
                 result, error_message = os.mkdir(target_dir)
                 if not result:
                     msg = "Could not create directory \"%s\": %s" % (target_dir, error_message)
-                    os.show_error(msg)
+                    print_error(msg)
                     remarks.append(msg)
                     return (False, remarks)
         
@@ -102,7 +105,7 @@ def do_action_copy_move_common(current_name: str, target_name: str, action: str,
 
         if not result:
             msg = "Could not create the target file %s: %s" % (current_name, error_message)
-            os.show_error(msg)
+            print_error(msg)
             remarks.append(msg)
             return (False, remarks)
 
@@ -117,7 +120,7 @@ def do_action_delete(current_name: str, os: IOSAbstraction, conf: Configuration)
         result, error_message = os.delete(current_name)
         if not result:
             msg = "Could not delete \"%s\": %s" % (current_name, error_message)
-            os.show_error(msg)
+            print_error(msg)
             remarks.append(msg)
             return (False, remarks)
 
@@ -158,8 +161,6 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
     file_index.purge()
 
     return (operations_done, file_index.get_size())
-
-
 
 
 def display_help():
@@ -222,7 +223,7 @@ def parse_input_args(args:list, config:Configuration, os_abs: IOSAbstraction):
             if value in FileAction.ALL_ACTIONS:
                 config.default_action = value
             else:
-                os_abs.show_error("Incorrect action: %s" % value)
+                print_error("Incorrect action: %s" % value)
                 exit(1)
         if option in ['-c', '--create-directories']:
             config.create_directories = True
@@ -265,6 +266,7 @@ def postproc_worker(file_index: FileIndex, instance_id: int):
             # simple rate limiting, preventing the worker threads from consuming to much IO
             # while the index is still being built.
             sleep(0.05)
+
 
 def run(args):
     global _index_fully_populated
@@ -314,6 +316,7 @@ def run(args):
                 break
         else:
             break
+
 
 if __name__=="__main__":
     run(argv[1:])
