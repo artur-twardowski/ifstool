@@ -1,0 +1,15 @@
+{
+    "COMM::eng": "Comment",
+    "COMM:ID3v1 Comment:eng": "Comment (ID3v1)",
+    "TALB": "Album",
+    "TCON": "Genre",
+    "TDRC": "Release date",
+    "TENC": "Encoder",
+    "TIT2": "Title",
+    "TIT3": "Subtitle",
+    "TLAN": "Language",
+    "TLEN": "Length",
+    "TMED": "Media",
+    "TPE1": "Artist",
+    "TRCK": "Track number"
+}

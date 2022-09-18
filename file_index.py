@@ -49,9 +49,9 @@ class FileIndexEntry:
 
         for key, value in self.metadata.items():
             if str(value).find('\n') != -1:
-                result += "%-*s = <<END\n%s\n<<END\n" % (max_key_len, key, value)
+                result += "    %-*s = <<END\n%s\n<<END\n" % (max_key_len, key, value)
             else:
-                result += "%-*s = %s\n" % (max_key_len, key, value)
+                result += "    %-*s = %s\n" % (max_key_len, key, value)
 
         return result
 

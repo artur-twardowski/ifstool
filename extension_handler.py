@@ -3,6 +3,7 @@ from configuration import Configuration
 from extension import Extension, ExtensionParam
 from extensions.df import Extension_df
 from extensions.cadf.audio import Extension_cadf_audio
+from extensions.tagger.audio import Extension_tagger_audio
 from console_output import print_error, print_message
 
 def validate_and_fill(params_dict: dict, extension_interface: list):
@@ -27,7 +28,8 @@ def validate_and_fill(params_dict: dict, extension_interface: list):
 def get_extensions():
     extensions = {
             "df": Extension_df,
-            "cadf.audio": Extension_cadf_audio
+            "cadf.audio": Extension_cadf_audio,
+            "tagger.audio": Extension_tagger_audio
             }
     return extensions
 
