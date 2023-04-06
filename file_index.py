@@ -2,7 +2,7 @@ from configuration import Configuration
 from os_abstraction import IOSAbstraction
 from file_action import FileAction
 from console_output import print_debug, print_warning
-
+import re
 
 def index_uid():
     while True:
@@ -21,6 +21,7 @@ class FileIndexEntry:
         self.remarks = []
         self._group_id = None
         self.metadata = {}
+        self.metadata_modified = False
 
     def __str__(self):
         return "%s: %s -> %s" % (self.unique_id, self.current_name, self.target_names)
@@ -28,6 +29,7 @@ class FileIndexEntry:
     def reset(self):
         self.target_names = []
         self.remarks = []
+        self.metadata_modified = False
 
     def get_uid(self):
         return self._unique_id
@@ -49,7 +51,7 @@ class FileIndexEntry:
 
         for key, value in self.metadata.items():
             if str(value).find('\n') != -1:
-                result += "    %-*s = <<END\n%s\n<<END\n" % (max_key_len, key, value)
+                result += "    %-*s = <<END\n%s\nEND\n" % (max_key_len, key, value)
             else:
                 result += "    %-*s = %s\n" % (max_key_len, key, value)
 
@@ -66,6 +68,18 @@ class FileIndexEntry:
     def ungroup(self):
         self._group_id = None
 
+    def set_metadata(self, key, value):
+        if key in self.metadata and self.metadata[key] == value:
+            return
+
+        self.metadata[key] = value
+        self.metadata_modified = True
+
+    def unset_metadata(self, key):
+        if key in self.metadata:
+            del self.metadata[key]
+            self.metadata_modified = True
+
 
 class FileIndex:
     def __init__(self, config: Configuration, os_abstraction: IOSAbstraction):
@@ -74,6 +88,8 @@ class FileIndex:
         self._config = config
         self._os = os_abstraction
         self._groups = []
+
+        self.re_multiline = re.compile(r'^(.*)<<([A-Za-z0-9_]+)$')
 
     def get_all(self):
         return self._files
@@ -209,18 +225,55 @@ class FileIndex:
     def handle_user_input(self, user_input:list):
         for entry_id, entry in self._files.items():
             entry.reset()
+
+        id = None
+        key = None
+        value = ""
+        multiline_terminator = None
         for line in user_input:
+            if len(line) == 0:
+                continue
+
+            line_indented = line.startswith(' ')
+
             line.strip()
             # Skip empty lines and comment lines
             if len(line) == 0 or line[0] == '#':
                 continue
 
-            id, action, name = line.split(None, 2)
-            if id in self._files:
-                entry = self._files[id]
-                entry.add_target_name(name, action)
+            if multiline_terminator is not None:
+                if line == multiline_terminator:
+                    multiline_terminator = None
+                    if value.startswith('\n'):
+                        value=value[1:]
+                    print_debug("Found file metadata (multiple lines): ID=%s, key=%s, value=\n\"\"\"%s\"\"\"" % (id, key, value))
+                    self._files[-1].set_metadata(key, value)
+
+                else:
+                    value += "\n%s" % line
+            elif line_indented:
+
+                key, value = line.split(" = ", 1)
+                key = key.strip()
+                
+                if self.re_multiline.match(value):
+                    value, multiline_terminator = self.re_multiline.findall(value)[0]
+                    print_debug("Found multiline: %s" % multiline_terminator)
+
+                if multiline_terminator is None:
+                    print_debug("Found file metadata (single line): ID=%s, key=%s, value=%s" % (id, key, value))
+                    self._files[id].set_metadata(key, value)
+                
             else:
-                entry = self.add([name], action)[0]
+                print_debug("Found file entry: %s" % line)
+                id, action, name = line.split(None, 2)
+                if id in self._files:
+                    entry = self._files[id]
+                    entry.add_target_name(name, action)
+                else:
+                    entry = self.add([name], action)[0]
+        if multiline_terminator is not None:
+            print_warning("Unterminated multiline value - expected %s" % multiline_terminator)
 
     def register_group(self, group_name):
         if group_name not in self._groups:

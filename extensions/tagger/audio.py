@@ -41,7 +41,6 @@ class Extension_tagger_audio(Extension):
         return False
 
     def _tag_to_key(self, key, mapping):
-        print("<%s>" % key)
         if key in mapping:
             return mapping[key]
         else:

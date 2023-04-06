@@ -27,7 +27,7 @@ def get_user_input(user_input_string, editor_cmd):
     tf.seek(0, 0)
 
     for line in tf:
-        result.append(line.strip())
+        result.append(line.rstrip())
 
     return result
 
@@ -135,15 +135,16 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
         new_target_names = []
         for target_name, action in file.target_names:
 
-            if action in [FileAction.RENAME_MOVE, FileAction.COPY, FileAction.LINK] \
-                    and file.current_name != target_name:
-
-                result, remarks = do_action_copy_move_common(file.current_name, target_name, action, os, conf)
-                if result:
-                    operations_done += 1
-                else:
-                    file.remarks += remarks
-                    new_target_names.append((target_name, action))
+            if action in [FileAction.RENAME_MOVE, FileAction.COPY, FileAction.LINK]:
+                if file.current_name != target_name:
+                    result, remarks = do_action_copy_move_common(file.current_name, target_name, action, os, conf)
+                    if result:
+                        operations_done += 1
+                    else:
+                        file.remarks += remarks
+                        new_target_names.append((target_name, action))
+                if file.metadata_modified:
+                    print("Metadata modified for %s" % target_name)
 
             elif action == FileAction.DELETE:
                 result, remarks = do_action_delete(file.current_name, os, conf)
