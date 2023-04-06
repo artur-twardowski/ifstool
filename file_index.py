@@ -279,3 +279,11 @@ class FileIndex:
         if group_name not in self._groups:
             self._groups.append(group_name)
 
+    def notify_before_op(self, file: FileIndexEntry):
+        for ext in self._config.extensions_chain:
+            ext.before_file_ops(file)
+
+    def notify_after_op(self, file: FileIndexEntry, new_name: str):
+        for ext in self._config.extensions_chain:
+            ext.after_file_ops(file, new_name)
+

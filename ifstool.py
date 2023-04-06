@@ -133,6 +133,8 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
 
     for uid, file in files.items():
         new_target_names = []
+        file_index.notify_before_op(file)
+
         for target_name, action in file.target_names:
 
             if action in [FileAction.RENAME_MOVE, FileAction.COPY, FileAction.LINK]:
@@ -140,23 +142,23 @@ def execute_actions(file_index: FileIndex, os: IOSAbstraction, conf: Configurati
                     result, remarks = do_action_copy_move_common(file.current_name, target_name, action, os, conf)
                     if result:
                         operations_done += 1
+                        file_index.notify_after_op(file, target_name)
                     else:
                         file.remarks += remarks
                         new_target_names.append((target_name, action))
-                if file.metadata_modified:
-                    print("Metadata modified for %s" % target_name)
 
             elif action == FileAction.DELETE:
                 result, remarks = do_action_delete(file.current_name, os, conf)
                 if result:
                     operations_done += 1
+                    file_index.notify_after_op(file, None)
                 else:
                     file.remarks += remarks
                     new_target_names.append((target_name, action))
 
             elif action == FileAction.IGNORE:
                 new_target_names.append((target_name, action))
-
+            
         file.target_names = new_target_names
 
     file_index.purge()

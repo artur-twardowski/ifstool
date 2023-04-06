@@ -91,7 +91,7 @@ class Extension:
         """
         pass
 
-    def after_file_ops(self, entry):
+    def after_file_ops(self, entry, new_file_name):
         """
         Invoked for each file in the index after the rename/move/copy/link operations
         are triggered.
