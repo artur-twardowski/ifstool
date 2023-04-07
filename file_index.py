@@ -90,6 +90,7 @@ class FileIndex:
         self._groups = []
 
         self.re_multiline = re.compile(r'^(.*)<<([A-Za-z0-9_]+)$')
+        self.re_key_value_pair = re.compile(r'^\s*(.*?)\s* = (.*)\s*')
 
     def get_all(self):
         return self._files
@@ -253,9 +254,9 @@ class FileIndex:
                     value += "\n%s" % line
             elif line_indented:
 
-                key, value = line.split(" = ", 1)
-                key = key.strip()
-                
+                if self.re_key_value_pair.match(line):
+                    key, value = self.re_key_value_pair.findall(line)[0]
+
                 if self.re_multiline.match(value):
                     value, multiline_terminator = self.re_multiline.findall(value)[0]
                     print_debug("Found multiline: %s" % multiline_terminator)
