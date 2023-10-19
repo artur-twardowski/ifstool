@@ -1,6 +1,6 @@
 from extension import Extension, ExtensionParam
 from file_index import FileIndex, FileIndexEntry
-from mutagen.mp3 import MP3
+from mutagen.mp3 import MP3, HeaderNotFoundError
 from mutagen.flac import FLAC
 from mutagen import id3
 import re
@@ -10,6 +10,8 @@ from os import path
 #TODO: filetypes should be distinguished based on the header rather than on the name
 
 class Extension_tagger_audio(Extension):
+
+    TAG_PRESENTATION_FORMATS = ["human", "raw"]
 
     TEXT_ONLY = 1
     TEXT_DESC = 2
@@ -82,6 +84,8 @@ class Extension_tagger_audio(Extension):
         Extension.__init__(self)
         config_path = path.dirname(path.abspath(__file__))
 
+        self._tag_presentation = "human"
+
         self.MAPPING_ID3 = {}
         for key, descriptor in self.ID3_IMPL_INTERNAL.items():
             _, _, name = descriptor
@@ -101,7 +105,19 @@ class Extension_tagger_audio(Extension):
         return ""
 
     def on_params_query(self):
-        pass
+        return [
+            ExtensionParam("tags",
+                "How the tag keys are presented",
+                values={
+                    "human": "Human-readable names",
+                    "raw": "Raw tags"
+                }, default="human")
+        ]
+
+    def on_params_passed(self, params):
+        assert("tags" in params)
+        assert(params["tags"] in self.TAG_PRESENTATION_FORMATS)
+        self._tag_presentation = params["tags"]
 
     def _get_format(self, filename):
         filename_lo = filename.lower()
@@ -121,12 +137,15 @@ class Extension_tagger_audio(Extension):
             return False
 
     def _tag_to_key(self, key, mapping):
-        if key in mapping:
+        if self._tag_to_key == "human" and key in mapping:
             return mapping[key]
         else:
             return key
 
     def _key_to_tag(self, key, mapping):
+        if self._tag_to_key == "raw":
+            return key
+
         for file_tag, input_key in mapping.items():
             if input_key == key:
                 return file_tag
@@ -135,11 +154,12 @@ class Extension_tagger_audio(Extension):
         file = MP3(filename)
         result = {}
 
-        for key, data in file.tags.items():
-            if isinstance(data, id3.TextFrame):
-                lines = [str(ln) for ln in data.text]
-                displayable_key = self._tag_to_key(key, self.MAPPING_ID3)
-                result[displayable_key] = '\n'.join(lines)
+        if file.tags is not None:
+            for key, data in file.tags.items():
+                if isinstance(data, id3.TextFrame):
+                    lines = [str(ln) for ln in data.text]
+                    displayable_key = self._tag_to_key(key, self.MAPPING_ID3)
+                    result[displayable_key] = '\n'.join(lines)
 
         return result
 
@@ -148,7 +168,7 @@ class Extension_tagger_audio(Extension):
 
         for tag_to_write, value in tags.items():
 
-            if tag_to_write not in file.tags:
+            if file.tags is not None and tag_to_write not in file.tags:
                 if value != "":
                     TagType, constructor_format, _ = self.ID3_IMPL_INTERNAL[tag_to_write]
                     if constructor_format == self.TEXT_ONLY:
@@ -182,7 +202,10 @@ class Extension_tagger_audio(Extension):
             entry.metadata = self._read_tags_flac(entry.current_name)
 
         elif fmt == "mp3":
-            entry.metadata = self._read_tags_mp3(entry.current_name)
+            try:
+                entry.metadata = self._read_tags_mp3(entry.current_name)
+            except HeaderNotFoundError as ex:
+                pass
 
     def before_file_ops(self, entry):
         if entry.metadata_modified:
