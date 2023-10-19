@@ -70,7 +70,8 @@ class Extension_tagger_audio(Extension):
         "TSIZ": (id3.TSIZ, TEXT_ONLY, "Size of audio data"),
         "TSSE": (id3.TSSE, TEXT_ONLY, "Encoder settings"),
         "TSST": (id3.TSST, TEXT_ONLY, "Set Subtitle"),
-        "TYER": (id3.TYER, TEXT_ONLY, "Year Of Recording")
+        "TYER": (id3.TYER, TEXT_ONLY, "Year Of Recording"),
+        "TXXX": (id3.TXXX, TEXT_DESC, "Comment")
     }
 
     def _read_json(self, filename):
